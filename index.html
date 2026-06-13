@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Route Optimizer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #0a0b0e; --bg2: #111318; --bg3: #1a1d24; --surface: #1e2230;
+  --border: rgba(255,255,255,0.08); --border2: rgba(255,255,255,0.15);
+  --accent: #00e5b0; --accent2: #0099ff; --accent3: #ff6b35;
+  --text: #f0f2f8; --muted: #6b7490; --muted2: #9aa0b8;
+  --radius: 12px; --radius-sm: 8px;
+}
+body { font-family: 'Syne', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; overflow-x: hidden; }
+.grid-bg { position: fixed; inset: 0; background-image: linear-gradient(rgba(0,229,176,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(0,229,176,0.03) 1px, transparent 1px); background-size: 40px 40px; pointer-events: none; z-index: 0; }
+.app { position: relative; z-index: 1; max-width: 900px; margin: 0 auto; padding: 40px 24px 80px; }
+header { margin-bottom: 48px; }
+.logo-row { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+.logo-icon { width: 40px; height: 40px; border-radius: 10px; background: linear-gradient(135deg, var(--accent), var(--accent2)); display: flex; align-items: center; justify-content: center; font-size: 20px; }
+h1 { font-size: 28px; font-weight: 800; letter-spacing: -0.5px; background: linear-gradient(135deg, var(--text) 40%, var(--accent)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+.subtitle { font-size: 14px; color: var(--muted); font-weight: 400; margin-top: 4px; font-family: 'Space Mono', monospace; }
+.card { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); padding: 24px; margin-bottom: 20px; }
+.card-label { font-size: 11px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: var(--accent); margin-bottom: 12px; font-family: 'Space Mono', monospace; }
+.start-input-wrap { display: flex; gap: 12px; align-items: center; }
+.pin-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); flex-shrink: 0; box-shadow: 0 0 12px var(--accent); }
+input[type="text"] { flex: 1; background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px 16px; font-size: 14px; color: var(--text); font-family: 'Syne', sans-serif; outline: none; transition: border-color 0.2s, box-shadow 0.2s; }
+input[type="text"]::placeholder { color: var(--muted); }
+input[type="text"]:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(0,229,176,0.1); }
+.upload-zone { border: 1.5px dashed var(--border2); border-radius: var(--radius); padding: 40px 24px; text-align: center; cursor: pointer; transition: all 0.2s; position: relative; }
+.upload-zone:hover, .upload-zone.drag-over { border-color: var(--accent); background: rgba(0,229,176,0.04); }
+.upload-zone input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+.upload-icon { font-size: 36px; margin-bottom: 12px; display: block; }
+.upload-title { font-size: 15px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
+.upload-hint { font-size: 13px; color: var(--muted); font-family: 'Space Mono', monospace; }
+.format-tags { display: flex; gap: 8px; justify-content: center; margin-top: 16px; flex-wrap: wrap; }
+.tag { font-size: 11px; padding: 4px 10px; border-radius: 20px; border: 1px solid var(--border2); color: var(--muted2); font-family: 'Space Mono', monospace; font-weight: 700; }
+.addr-list { display: flex; flex-direction: column; gap: 8px; max-height: 220px; overflow-y: auto; padding-right: 4px; }
+.addr-list::-webkit-scrollbar { width: 4px; }
+.addr-list::-webkit-scrollbar-track { background: var(--bg3); border-radius: 2px; }
+.addr-list::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+.addr-item { display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: var(--bg3); border-radius: var(--radius-sm); border: 1px solid var(--border); font-size: 13px; color: var(--muted2); }
+.addr-num { width: 22px; height: 22px; border-radius: 50%; background: var(--surface); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: var(--muted2); flex-shrink: 0; font-family: 'Space Mono', monospace; }
+.addr-remove { margin-left: auto; background: none; border: none; color: var(--muted); cursor: pointer; font-size: 16px; line-height: 1; padding: 2px 4px; border-radius: 4px; transition: color 0.15s; }
+.addr-remove:hover { color: #ff6b6b; }
+.run-btn { width: 100%; padding: 16px; background: linear-gradient(135deg, var(--accent) 0%, #00c4ff 100%); border: none; border-radius: var(--radius); font-size: 16px; font-weight: 700; color: #0a0b0e; cursor: pointer; font-family: 'Syne', sans-serif; letter-spacing: 0.5px; transition: opacity 0.2s, transform 0.1s; margin-top: 24px; }
+.run-btn:hover { opacity: 0.92; }
+.run-btn:active { transform: scale(0.99); }
+.run-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+#loading { display: none; text-align: center; padding: 48px 24px; }
+.spinner { width: 44px; height: 44px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 20px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.loading-text { font-size: 15px; color: var(--muted2); font-family: 'Space Mono', monospace; }
+.loading-step { font-size: 12px; color: var(--muted); margin-top: 6px; min-height: 18px; }
+#results { display: none; }
+.results-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
+.results-title { font-size: 20px; font-weight: 700; color: var(--text); }
+.reset-btn { background: none; border: 1px solid var(--border2); color: var(--muted2); padding: 8px 14px; border-radius: var(--radius-sm); font-size: 13px; cursor: pointer; font-family: 'Syne', sans-serif; transition: all 0.2s; }
+.reset-btn:hover { border-color: var(--accent); color: var(--accent); }
+.stats-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 24px; }
+.stat-card { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 18px; }
+.stat-label { font-size: 11px; color: var(--muted); font-family: 'Space Mono', monospace; font-weight: 700; letter-spacing: 0.8px; text-transform: uppercase; margin-bottom: 6px; }
+.stat-value { font-size: 22px; font-weight: 700; color: var(--accent); }
+.stat-value.blue { color: var(--accent2); }
+.stat-value.orange { color: var(--accent3); }
+.route-timeline { position: relative; padding-left: 32px; }
+.timeline-line { position: absolute; left: 10px; top: 12px; bottom: 12px; width: 2px; background: linear-gradient(180deg, var(--accent), var(--accent2)); border-radius: 1px; }
+.timeline-stop { position: relative; margin-bottom: 16px; display: flex; align-items: flex-start; gap: 16px; }
+.timeline-dot { position: absolute; left: -26px; top: 10px; width: 12px; height: 12px; border-radius: 50%; background: var(--bg2); border: 2px solid var(--accent); flex-shrink: 0; z-index: 1; }
+.timeline-dot.start { border-color: var(--accent); background: var(--accent); box-shadow: 0 0 10px rgba(0,229,176,0.5); }
+.timeline-dot.end { border-color: var(--accent3); background: var(--accent3); box-shadow: 0 0 10px rgba(255,107,53,0.5); }
+.stop-card { flex: 1; background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 18px; }
+.stop-card.highlighted { border-color: rgba(0,229,176,0.3); background: rgba(0,229,176,0.03); }
+.stop-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+.stop-num { font-size: 11px; font-weight: 700; color: var(--muted); font-family: 'Space Mono', monospace; letter-spacing: 1px; text-transform: uppercase; }
+.stop-badge { font-size: 11px; padding: 2px 8px; border-radius: 10px; font-family: 'Space Mono', monospace; font-weight: 700; }
+.stop-badge.start-badge { background: rgba(0,229,176,0.1); color: var(--accent); border: 1px solid rgba(0,229,176,0.2); }
+.stop-badge.end-badge { background: rgba(255,107,53,0.1); color: var(--accent3); border: 1px solid rgba(255,107,53,0.2); }
+.stop-address { font-size: 14px; font-weight: 600; color: var(--text); line-height: 1.4; }
+.seg-arrow { display: flex; align-items: center; gap: 8px; padding: 4px 0 4px 4px; color: var(--muted); font-size: 12px; font-family: 'Space Mono', monospace; }
+.map-btn { display: block; width: 100%; margin-top: 24px; padding: 14px; background: transparent; border: 1px solid var(--accent); border-radius: var(--radius); color: var(--accent); font-size: 14px; font-weight: 600; font-family: 'Syne', sans-serif; cursor: pointer; transition: all 0.2s; text-align: center; text-decoration: none; }
+.map-btn:hover { background: rgba(0,229,176,0.08); }
+.note-card { background: rgba(0,153,255,0.05); border: 1px solid rgba(0,153,255,0.15); border-radius: var(--radius); padding: 14px 18px; font-size: 13px; color: var(--muted2); line-height: 1.6; margin-top: 16px; font-family: 'Space Mono', monospace; }
+.error-card { background: rgba(255,60,60,0.05); border: 1px solid rgba(255,60,60,0.2); border-radius: var(--radius); padding: 18px 20px; color: #ff8080; font-size: 14px; line-height: 1.6; display: none; margin-top: 16px; }
+.manual-input-row { display: flex; gap: 10px; margin-top: 12px; }
+.add-btn { flex-shrink: 0; padding: 11px 20px; background: var(--bg3); border: 1px solid var(--border2); border-radius: var(--radius-sm); color: var(--accent); font-size: 13px; font-weight: 700; cursor: pointer; font-family: 'Syne', sans-serif; transition: all 0.2s; white-space: nowrap; }
+.add-btn:hover { background: rgba(0,229,176,0.08); border-color: var(--accent); }
+.section-divider { display: flex; align-items: center; gap: 12px; margin: 16px 0; color: var(--muted); font-size: 12px; font-family: 'Space Mono', monospace; }
+.section-divider::before, .section-divider::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+@media (max-width: 600px) { .stats-row { grid-template-columns: 1fr; } .app { padding: 24px 16px 60px; } }
+</style>
+</head>
+<body>
+<div class="grid-bg"></div>
+<div class="app">
+  <header>
+    <div class="logo-row">
+      <div class="logo-icon">🗺️</div>
+      <h1>Route Optimizer</h1>
+    </div>
+    <p class="subtitle">// AI-powered delivery &amp; logistics routing</p>
+  </header>
+
+  <div id="input-section">
+    <div class="card">
+      <div class="card-label">Starting Address</div>
+      <div class="start-input-wrap">
+        <div class="pin-dot"></div>
+        <input type="text" id="startAddr" placeholder="e.g. 123 Main St, Nashville, TN 37201" />
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-label">Upload Address File</div>
+      <div class="upload-zone" id="dropZone">
+        <input type="file" id="fileInput" accept=".csv,.txt,.xlsx,.xls,.json" />
+        <span class="upload-icon">📂</span>
+        <div class="upload-title" id="uploadTitle">Drop your file or click to browse</div>
+        <div class="upload-hint">Addresses extracted automatically</div>
+        <div class="format-tags">
+          <span class="tag">CSV</span>
+          <span class="tag">TXT</span>
+          <span class="tag">JSON</span>
+          <span class="tag">XLSX</span>
+        </div>
+      </div>
+      <div class="section-divider">or add manually</div>
+      <div class="manual-input-row">
+        <input type="text" id="manualAddr" placeholder="Add an address manually..." />
+        <button class="add-btn" id="addBtn">+ Add</button>
+      </div>
+    </div>
+
+    <div class="card" id="addrCard" style="display:none">
+      <div class="card-label">Addresses to Visit (<span id="addrCount">0</span>)</div>
+      <div class="addr-list" id="addrList"></div>
+    </div>
+
+    <div class="error-card" id="errorCard"></div>
+    <button class="run-btn" id="runBtn" disabled>✦ Optimize Route</button>
+  </div>
+
+  <div id="loading">
+    <div class="spinner"></div>
+    <div class="loading-text">Analyzing &amp; optimizing...</div>
+    <div class="loading-step" id="loadingStep">Parsing addresses</div>
+  </div>
+
+  <div id="results">
+    <div class="results-header">
+      <div class="results-title">Optimized Route</div>
+      <button class="reset-btn" id="resetBtn">← New Route</button>
+    </div>
+    <div class="stats-row">
+      <div class="stat-card"><div class="stat-label">Total Stops</div><div class="stat-value" id="statStops">—</div></div>
+      <div class="stat-card"><div class="stat-label">Est. Distance</div><div class="stat-value blue" id="statDist">—</div></div>
+      <div class="stat-card"><div class="stat-label">Est. Drive Time</div><div class="stat-value orange" id="statTime">—</div></div>
+    </div>
+    <div class="card" style="padding: 20px 24px;">
+      <div class="card-label" style="margin-bottom: 20px;">Route Order</div>
+      <div class="route-timeline" id="routeTimeline">
+        <div class="timeline-line"></div>
+      </div>
+    </div>
+    <a id="mapsLink" class="map-btn" target="_blank" rel="noopener">🗺 Open in Google Maps</a>
+    <div class="note-card" id="aiNote"></div>
+  </div>
+</div>
+
+<script>
+(function() {
+  'use strict';
+
+  let addresses = [];
+
+  // --- Element refs ---
+  const startAddr   = document.getElementById('startAddr');
+  const runBtn      = document.getElementById('runBtn');
+  const resetBtn    = document.getElementById('resetBtn');
+  const addrCard    = document.getElementById('addrCard');
+  const addrList    = document.getElementById('addrList');
+  const addrCount   = document.getElementById('addrCount');
+  const errorCard   = document.getElementById('errorCard');
+  const fileInput   = document.getElementById('fileInput');
+  const dropZone    = document.getElementById('dropZone');
+  const uploadTitle = document.getElementById('uploadTitle');
+  const manualAddr  = document.getElementById('manualAddr');
+  const addBtn      = document.getElementById('addBtn');
+
+  // --- UI helpers ---
+  function updateUI() {
+    addrCard.style.display = addresses.length ? 'block' : 'none';
+    addrCount.textContent = addresses.length;
+    runBtn.disabled = addresses.length < 1 || !startAddr.value.trim();
+    renderAddrList();
+  }
+
+  function renderAddrList() {
+    addrList.innerHTML = '';
+    addresses.forEach(function(a, i) {
+      const div = document.createElement('div');
+      div.className = 'addr-item';
+      div.innerHTML =
+        '<div class="addr-num">' + (i + 1) + '</div>' +
+        '<span>' + escHtml(a) + '</span>' +
+        '<button class="addr-remove" data-i="' + i + '" title="Remove">✕</button>';
+      addrList.appendChild(div);
+    });
+  }
+
+  function escHtml(str) {
+    return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function showError(msg) {
+    errorCard.style.display = msg ? 'block' : 'none';
+    errorCard.textContent = msg;
+  }
+
+  function setLoadingStep(msg) {
+    document.getElementById('loadingStep').textContent = msg;
+  }
+
+  // --- Event listeners ---
+  startAddr.addEventListener('input', updateUI);
+
+  addBtn.addEventListener('click', addManualAddress);
+  manualAddr.addEventListener('keydown', function(e) { if (e.key === 'Enter') addManualAddress(); });
+
+  addrList.addEventListener('click', function(e) {
+    const btn = e.target.closest('.addr-remove');
+    if (!btn) return;
+    const i = parseInt(btn.dataset.i, 10);
+    addresses.splice(i, 1);
+    updateUI();
+  });
+
+  resetBtn.addEventListener('click', resetAll);
+
+  runBtn.addEventListener('click', optimizeRoute);
+
+  dropZone.addEventListener('dragover', function(e) { e.preventDefault(); dropZone.classList.add('drag-over'); });
+  dropZone.addEventListener('dragleave', function() { dropZone.classList.remove('drag-over'); });
+  dropZone.addEventListener('drop', function(e) {
+    e.preventDefault();
+    dropZone.classList.remove('drag-over');
+    var file = e.dataTransfer.files[0];
+    if (file) handleFile(file);
+  });
+
+  fileInput.addEventListener('change', function(e) {
+    if (e.target.files[0]) handleFile(e.target.files[0]);
+  });
+
+  // --- Core functions ---
+  function addManualAddress() {
+    var val = manualAddr.value.trim();
+    if (!val) return;
+    if (!addresses.includes(val)) {
+      addresses.push(val);
+      updateUI();
+    }
+    manualAddr.value = '';
+  }
+
+  function resetAll() {
+    document.getElementById('results').style.display = 'none';
+    document.getElementById('input-section').style.display = 'block';
+    addresses = [];
+    startAddr.value = '';
+    fileInput.value = '';
+    uploadTitle.textContent = 'Drop your file or click to browse';
+    showError('');
+    updateUI();
+  }
+
+  async function handleFile(file) {
+    showError('');
+    uploadTitle.textContent = '⏳ Reading file...';
+    var ext = file.name.split('.').pop().toLowerCase();
+
+    try {
+      var extracted = [];
+
+      if (ext === 'xlsx' || ext === 'xls') {
+        extracted = await extractFromXlsx(file);
+      } else {
+        var text = await file.text();
+        extracted = extractFromText(text, file.name);
+      }
+
+      if (extracted.length > 0) {
+        var newOnes = extracted.filter(function(a) { return !addresses.includes(a); });
+        addresses.push.apply(addresses, newOnes);
+        updateUI();
+        uploadTitle.textContent = '✓ ' + newOnes.length + ' address' + (newOnes.length !== 1 ? 'es' : '') + ' loaded';
+      } else {
+        uploadTitle.textContent = 'Drop your file or click to browse';
+        showError('No addresses found. Try adding them manually.');
+      }
+    } catch (err) {
+      uploadTitle.textContent = 'Drop your file or click to browse';
+      showError('Could not read file: ' + err.message);
+    }
+  }
+
+  // Extract addresses from xlsx using SheetJS - reads the Address column directly
+  function extractFromXlsx(file) {
+    return new Promise(function(resolve, reject) {
+      var reader = new FileReader();
+      reader.onerror = function() { reject(new Error('File read error')); };
+      reader.onload = function(e) {
+        try {
+          var data = new Uint8Array(e.target.result);
+          var wb = XLSX.read(data, { type: 'array' });
+          var allAddresses = [];
+
+          wb.SheetNames.forEach(function(sheetName) {
+            var ws = wb.Sheets[sheetName];
+            var rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+            if (rows.length < 2) return;
+
+            var headers = rows[0].map(function(h) { return String(h).toLowerCase().trim(); });
+            var addrIdx = headers.indexOf('address');
+
+            if (addrIdx !== -1) {
+              // Structured file with an Address column — read it directly
+              // Also try to find a city column
+              var cityIdx = headers.findIndex(function(h) { return h === 'city' || h === 'town'; });
+              var stateIdx = headers.findIndex(function(h) { return h === 'state'; });
+
+              for (var i = 1; i < rows.length; i++) {
+                var raw = String(rows[i][addrIdx] || '').trim();
+                if (!raw || !/^\d/.test(raw)) continue; // skip empty or no house number
+
+                var addr = raw;
+                // Append city/state if they exist in other columns
+                if (cityIdx !== -1 && rows[i][cityIdx]) {
+                  addr += ', ' + String(rows[i][cityIdx]).trim();
+                  if (stateIdx !== -1 && rows[i][stateIdx]) {
+                    addr += ', ' + String(rows[i][stateIdx]).trim();
+                  }
+                } else if (!addr.includes(',')) {
+                  // No city in file — try to detect it from context or leave bare
+                  // Look for a city-like value in other columns of first data row
+                  var guessedCity = guessCity(rows, i, headers);
+                  if (guessedCity) addr += ', ' + guessedCity;
+                }
+
+                addr = cleanForMaps(addr);
+                if (!allAddresses.includes(addr)) allAddresses.push(addr);
+              }
+            } else {
+              // No Address column — convert to CSV and parse as plain text
+              var csv = XLSX.utils.sheet_to_csv(ws);
+              var found = extractFromText(csv, 'sheet.csv');
+              found.forEach(function(a) { if (!allAddresses.includes(a)) allAddresses.push(a); });
+            }
+          });
+
+          resolve(allAddresses);
+        } catch (err) { reject(err); }
+      };
+      reader.readAsArrayBuffer(file);
+    });
+  }
+
+  // Guess city by scanning the row for known city-like values
+  function guessCity(rows, rowIdx, headers) {
+    var row = rows[rowIdx];
+    var knownCities = ['Franklin', 'Nashville', 'Brentwood', 'Murfreesboro', 'Hendersonville', 'Gallatin', 'Smyrna', 'Spring Hill', 'Columbia', 'Clarksville', 'Nolensville'];
+    for (var c = 0; c < row.length; c++) {
+      var val = String(row[c] || '').trim();
+      for (var j = 0; j < knownCities.length; j++) {
+        if (val.toLowerCase().includes(knownCities[j].toLowerCase())) {
+          return knownCities[j] + ', TN';
+        }
+      }
+    }
+    // Check if first data row has a city-like field paired with a state abbreviation
+    for (var c2 = 0; c2 < row.length; c2++) {
+      var v = String(row[c2] || '').trim();
+      if (/^[A-Z]{2}$/.test(v) && c2 > 0) {
+        var city = String(row[c2 - 1] || '').trim();
+        if (city && city.length > 2 && !/^\d/.test(city)) return city + ', ' + v;
+      }
+    }
+    return '';
+  }
+
+  // Extract addresses from plain text / csv using simple heuristics
+  function extractFromText(text, filename) {
+    var results = [];
+    var lines = text.split(/\r?\n/);
+    var addrPattern = /\b\d+\s+[A-Za-z][A-Za-z0-9\s\.]+(?:Ave|Avenue|St|Street|Rd|Road|Dr|Drive|Ln|Lane|Blvd|Boulevard|Ct|Court|Cir|Circle|Cres|Way|Pl|Place|Pkwy|Parkway|Ter|Terrace|Trl|Trail|Sq|Square|Trace|Loop)\b[,\s]+[A-Za-z\s]+,\s*[A-Z]{2}/gi;
+
+    lines.forEach(function(line) {
+      var matches = line.match(addrPattern);
+      if (matches) {
+        matches.forEach(function(m) {
+          var cleaned = cleanForMaps(m.trim());
+          if (!results.includes(cleaned)) results.push(cleaned);
+        });
+      }
+    });
+    return results;
+  }
+
+  // Clean address for Google Maps compatibility
+  function cleanForMaps(addr) {
+    var ABBREVS = [
+      [/\bCr\b/gi, 'Cir'], [/\bCres\b/gi, 'Cir'],
+      [/\bAve\.?\b/gi, 'Ave'], [/\bBlvd\.?\b/gi, 'Blvd'],
+      [/\bLn\.?\b/gi, 'Ln'], [/\bDr\.?\b/gi, 'Dr'],
+      [/\bPkwy\.?\b/gi, 'Pkwy'], [/\bSt\.?\b/gi, 'St'],
+      [/\bRd\.?\b/gi, 'Rd'], [/\bPl\.?\b/gi, 'Pl'],
+      [/\bTer\.?\b/gi, 'Ter'], [/\bCt\.?\b/gi, 'Ct'],
+      [/\bHwy\.?\b/gi, 'Hwy'], [/^HOA\s+/i, '']
+    ];
+
+    var CITIES = ['Franklin','Nashville','Brentwood','Murfreesboro','Hendersonville','Gallatin','Smyrna','Spring Hill','Columbia','Clarksville','Nolensville','Thompsons Station'];
+
+    var cleaned = addr.replace(/^HOA\s+/i, '').trim();
+
+    ABBREVS.forEach(function(pair) { cleaned = cleaned.replace(pair[0], pair[1]); });
+
+    // Insert comma before city name if missing
+    CITIES.forEach(function(city) {
+      var re = new RegExp('(\\S)\\s+(' + city + '\\s*,)', 'i');
+      if (re.test(cleaned)) cleaned = cleaned.replace(re, '$1, $2');
+    });
+
+    return cleaned.trim();
+  }
+
+  // --- Route optimization ---
+  async function optimizeRoute() {
+    var start = startAddr.value.trim();
+    if (!start || addresses.length === 0) return;
+
+    showError('');
+    document.getElementById('input-section').style.display = 'none';
+    document.getElementById('loading').style.display = 'block';
+    document.getElementById('results').style.display = 'none';
+
+    var steps = ['Geocoding addresses...', 'Calculating distance matrix...', 'Running optimization...', 'Applying 2-opt improvements...', 'Finalizing route...'];
+    var stepIdx = 0;
+    var stepInterval = setInterval(function() {
+      if (stepIdx < steps.length) setLoadingStep(steps[stepIdx++]);
+    }, 1200);
+
+    try {
+      var result = await callOptimizeAPI(start, addresses);
+      clearInterval(stepInterval);
+      displayResults(result, start);
+    } catch (err) {
+      clearInterval(stepInterval);
+      document.getElementById('loading').style.display = 'none';
+      document.getElementById('input-section').style.display = 'block';
+      showError('Optimization failed: ' + err.message + '. Please check your API connection.');
+    }
+  }
+
+  async function callOptimizeAPI(start, stops) {
+    var prompt = 'You are a professional route optimization AI with expert knowledge of US roads and neighborhoods. Reorder delivery stops to minimize total driving distance, avoiding backtracking. Group stops on the same street or neighborhood together.\n\n' +
+      'Starting address: ' + start + '\n' +
+      'Stops to visit (' + stops.length + ' total):\n' +
+      stops.map(function(s, i) { return (i + 1) + '. ' + s; }).join('\n') + '\n\n' +
+      'CRITICAL: Return ONLY valid JSON, no markdown, no explanation:\n' +
+      '{"orderedStops":["address1","address2",...],"estimatedTotalMiles":0,"estimatedDriveMinutes":0,"routingNotes":"explanation","segments":[{"from":"a","to":"b","estimatedMiles":0}]}\n\n' +
+      'All ' + stops.length + ' stops must appear in orderedStops exactly as written above. Do not include the starting address in orderedStops.';
+
+    var resp = await fetch('/api/claude', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'gpt-4o',
+        max_tokens: 2000,
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+
+    if (!resp.ok) throw new Error('API error ' + resp.status);
+    var data = await resp.json();
+    if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
+    var text = (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || '';
+    text = text.replace(/```json|```/g, '').trim();
+    return JSON.parse(text);
+  }
+
+  function displayResults(result, start) {
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('results').style.display = 'block';
+
+    var stops = result.orderedStops || [];
+    var miles = result.estimatedTotalMiles || 0;
+    var mins  = result.estimatedDriveMinutes || 0;
+
+    document.getElementById('statStops').textContent = stops.length;
+    document.getElementById('statDist').textContent  = Math.round(miles * 10) / 10 + ' mi';
+    var hours = Math.floor(mins / 60);
+    var remMins = Math.round(mins % 60);
+    document.getElementById('statTime').textContent  = hours > 0 ? hours + 'h ' + remMins + 'm' : remMins + ' min';
+
+    var timeline = document.getElementById('routeTimeline');
+    timeline.innerHTML = '<div class="timeline-line"></div>';
+
+    var allStops = [start].concat(stops);
+    allStops.forEach(function(addr, i) {
+      var isStart = i === 0;
+      var isEnd   = i === allStops.length - 1 && !isStart;
+      var seg     = result.segments && result.segments[i - 1];
+
+      if (i > 0 && seg) {
+        var arrow = document.createElement('div');
+        arrow.className = 'seg-arrow';
+        arrow.textContent = '↓ ' + seg.estimatedMiles + ' mi';
+        timeline.appendChild(arrow);
+      }
+
+      var stop = document.createElement('div');
+      stop.className = 'timeline-stop';
+
+      var dot = document.createElement('div');
+      dot.className = 'timeline-dot' + (isStart ? ' start' : isEnd ? ' end' : '');
+
+      var badge = isStart ? '<span class="stop-badge start-badge">START</span>' : isEnd ? '<span class="stop-badge end-badge">LAST STOP</span>' : '';
+
+      var card = document.createElement('div');
+      card.className = 'stop-card' + (isStart ? ' highlighted' : '');
+      card.innerHTML =
+        '<div class="stop-header">' +
+        '<div class="stop-num">' + (isStart ? 'ORIGIN' : 'STOP ' + i) + '</div>' +
+        badge +
+        '</div>' +
+        '<div class="stop-address">' + escHtml(cleanForMaps(addr)) + '</div>';
+
+      stop.appendChild(dot);
+      stop.appendChild(card);
+      timeline.appendChild(stop);
+    });
+
+    var mapsQuery = allStops.map(function(a) { return encodeURIComponent(cleanForMaps(a)); }).join('/');
+    document.getElementById('mapsLink').href = 'https://www.google.com/maps/dir/' + mapsQuery;
+    document.getElementById('aiNote').textContent = '💡 ' + (result.routingNotes || 'Route optimized using geographic clustering.');
+  }
+
+})();
+</script>
+</body>
+</html>
